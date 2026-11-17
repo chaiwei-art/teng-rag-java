@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+rag:
+  llm:
+    # OpenAI 兼容网关（默认指向本机已配置的 mimo 网关，可用环境变量覆盖）
+    base-url: ${LLM_BASE_URL:https://api.xiaomimimo.com/v1}
+    api-key: ${LLM_API_KEY:${OPENAI_API_KEY:}}
+    model: ${LLM_MODEL:mimo-v2.6-flash}
+    timeout-seconds: 60
+  retrieval:
+    top-k: 4
+    min-score: 0.35
+  chunk:
+    # 切分粒度（字符）：中文场景 500 字/段、80 字重叠是比较稳的起点
+    max-segment-size: 500
+    max-overlap-size: 80
