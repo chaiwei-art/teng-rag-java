@@ -1,0 +1,22 @@
+[
+  { "id": "E01", "question": "七天无理由退货的运费由谁承担？", "expectDoc": "退货政策.md" },
+  { "id": "E02", "question": "签收超过7天但不超过30天退货能退多少钱？", "expectDoc": "退货政策.md" },
+  { "id": "E03", "question": "订单发货后我想取消，还能拦截退款吗？", "expectDoc": "退货政策.md" },
+  { "id": "E04", "question": "已激活的数字产品可以无理由退货吗？", "expectDoc": "退货政策.md" },
+  { "id": "E05", "question": "退款审核通过后多久能到账？", "expectDoc": "退货政策.md" },
+  { "id": "E06", "question": "质量问题退货的运费谁出？", "expectDoc": "退货政策.md" },
+  { "id": "E07", "question": "签收超过30天还支持退货吗？", "expectDoc": "退货政策.md" },
+  { "id": "E08", "question": "会员等级是怎么划分的？", "expectDoc": "会员制度.md" },
+  { "id": "E09", "question": "消费多少元可以升到金卡会员？", "expectDoc": "会员制度.md" },
+  { "id": "E10", "question": "积分可以抵现吗？比例是多少？", "expectDoc": "会员制度.md" },
+  { "id": "E11", "question": "金卡会员生日有什么礼遇？", "expectDoc": "会员制度.md" },
+  { "id": "E12", "question": "积分什么时候过期？", "expectDoc": "会员制度.md" },
+  { "id": "E13", "question": "银卡会员每年能领几张优惠券？", "expectDoc": "会员制度.md" },
+  { "id": "E14", "question": "会员什么情况下会被降级？", "expectDoc": "会员制度.md" },
+  { "id": "E15", "question": "现货订单几点前付款当天能发货？", "expectDoc": "发货与物流.md" },
+  { "id": "E16", "question": "满多少元可以免运费？", "expectDoc": "发货与物流.md" },
+  { "id": "E17", "question": "发往新疆西藏要加收多少运费？", "expectDoc": "发货与物流.md" },
+  { "id": "E18", "question": "门店自提需要保留几天？", "expectDoc": "发货与物流.md" },
+  { "id": "E19", "question": "商品破损后多少小时内拍照反馈才能补发？", "expectDoc": "发货与物流.md" },
+  { "id": "E20", "question": "支持配送到海外吗？", "expectDoc": "发货与物流.md" }
+]

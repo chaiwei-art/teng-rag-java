@@ -57,7 +57,10 @@
 <body>
 <header>
   <div class="brand"><b>📚 TengRAG</b><span>知识库问答 · Spring Boot + LangChain4j + BGE-zh</span></div>
-  <div class="stats" id="stats">docs: 0</div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <button style="background:#238636;padding:6px 14px;font-size:12px;border-radius:8px" onclick="runEval()">⚡ 离线评测</button>
+    <div class="stats" id="stats">docs: 0</div>
+  </div>
 </header>
 
 <main>
@@ -147,6 +150,7 @@ async function ask() {
   let sourcesHtml = '';
   let usageHtml = '';
   let retrievalMs = null;
+  let cacheHit = false;
 
   try {
     const resp = await fetch('/api/chat', {
@@ -181,7 +185,9 @@ async function ask() {
     let d = {};
     try { d = JSON.parse(data); } catch { return; }
 
-    if (event === 'sources' && d.items && d.items.length) {
+    if (event === 'cache') {
+      cacheHit = !!d.hit;
+    } else if (event === 'sources' && d.items && d.items.length) {
       sourcesHtml = '<div class="sources"><b>引用来源：</b><br>' +
         d.items.map((s, i) => '[' + (i+1) + '] ' + escapeHtml(s.docName) +
           ' <span style="opacity:.6">(' + s.score.toFixed(3) + ')</span>').join('<br>') + '</div>';
@@ -192,7 +198,8 @@ async function ask() {
     } else if (event === 'retrieval') {
       retrievalMs = d.latencyMs;
     } else if (event === 'usage') {
-      usageHtml = '<div class="usage">' + d.promptTokens + '↑ / ' + d.completionTokens +
+      usageHtml = '<div class="usage">' + (cacheHit ? '⚡ 缓存命中 · ' : '') +
+        d.promptTokens + '↑ / ' + d.completionTokens +
         '↓ tokens · ' + d.latencyMs + 'ms' + (retrievalMs != null ? ' · 检索 ' + retrievalMs + 'ms' : '') + '</div>';
     } else if (event === 'error') {
       answerText = '❌ ' + (d.message || '未知错误');
@@ -207,6 +214,32 @@ async function ask() {
 
 function escapeHtml(s) {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 离线检索评测：跑标注集统计召回率（纯检索层，不调 LLM、零 token）
+async function runEval() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '评测中…';
+  try {
+    const r = await fetch('/api/eval/run', { method: 'POST' });
+    const report = await r.json();
+    const pct = (report.hitRate * 100).toFixed(1);
+    const missed = report.rows.filter(x => !x.hit).map(x => x.id + ' ' + x.question);
+    let html = '<b>📊 离线检索评测</b>（Top-' + report.topK + '，' + report.total + ' 条标注）<br>' +
+      '召回命中率 hit@' + report.topK + '：<b style="color:' + (report.hitRate >= 0.9 ? '#3fb950' : '#d29922') + '">' +
+      pct + '%</b>（' + report.hitAtK + '/' + report.total + '）<br>' +
+      '命中样本平均相似度：' + report.avgHitScore.toFixed(3) +
+      ' · 平均检索耗时：' + report.avgLatencyMs + 'ms';
+    if (missed.length) {
+      html += '<br><span style="color:#f85149">未命中：</span><br>' + missed.map(escapeHtml).join('<br>');
+    }
+    addMsg('ai', html);
+  } catch (e) {
+    addMsg('ai', '❌ 评测失败: ' + escapeHtml(String(e)));
+  }
+  btn.disabled = false;
+  btn.textContent = '⚡ 离线评测';
 }
 
 // 极简 markdown：粗体 / 行内代码 / 换行（回答以纯文本+简单标记为主）

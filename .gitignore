@@ -18,4 +18,8 @@ Thumbs.db
 
 ### Logs ###
 *.log
+
+### Local runtime data ###
+data/
+tools/
 .ontmp/

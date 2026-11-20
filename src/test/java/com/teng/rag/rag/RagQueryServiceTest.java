@@ -21,37 +21,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RagQueryServiceTest {
 
-    /**
-     * 桩嵌入：含"苹果"的文本 → 向量A，含"汽车"的 → 向量B，其他 → 向量C。
-     * 同向量余弦相似度=1，正交=0 → 检索排序可精确断言。
-     */
-    private static class KeywordEmbeddingModel implements EmbeddingModel {
-
-        private static final Map<String, float[]> VECTORS = Map.of(
-                "apple", new float[]{1f, 0f, 0f},
-                "car", new float[]{0f, 1f, 0f},
-                "other", new float[]{0f, 0f, 1f}
-        );
-
-        private Embedding vectorFor(String text) {
-            if (text.contains("苹果")) return new Embedding(VECTORS.get("apple"));
-            if (text.contains("汽车")) return new Embedding(VECTORS.get("car"));
-            return new Embedding(VECTORS.get("other"));
-        }
-
-        @Override
-        public dev.langchain4j.model.output.Response<Embedding> embed(String text) {
-            return dev.langchain4j.model.output.Response.from(vectorFor(text));
-        }
-
-        @Override
-        public dev.langchain4j.model.output.Response<List<Embedding>> embedAll(
-                List<TextSegment> segments) {
-            List<Embedding> embeddings = segments.stream().map(s -> vectorFor(s.text())).toList();
-            return dev.langchain4j.model.output.Response.from(embeddings);
-        }
-    }
-
     /** 桩 LLM：录制收到的 Prompt，绝不发起网络调用。 */
     private static class RecordingLlmStreamer implements LlmStreamer {
 
@@ -76,7 +45,9 @@ class RagQueryServiceTest {
         var props = new RagProperties(
                 new RagProperties.Llm("http://localhost", "k", "m", 10),
                 new RagProperties.Retrieval(2, 0.0),
-                new RagProperties.Chunk(100, 10));
+                new RagProperties.Chunk(100, 10),
+                new RagProperties.Cache(1800, 300, 30),
+                new RagProperties.Store("target/test-store.json"));
         service = new RagQueryService(new KeywordEmbeddingModel(), store, llm, props);
 
         // 预置三段知识
@@ -155,7 +126,9 @@ class RagQueryServiceTest {
         var props = new RagProperties(
                 new RagProperties.Llm("http://localhost", "k", "m", 10),
                 new RagProperties.Retrieval(2, 0.99), // 阈值高到几乎不可能命中
-                new RagProperties.Chunk(100, 10));
+                new RagProperties.Chunk(100, 10),
+                new RagProperties.Cache(1800, 300, 30),
+                new RagProperties.Store("target/test-store.json"));
         var strictService = new RagQueryService(
                 new KeywordEmbeddingModel(), store, new RecordingLlmStreamer(), props);
         // "汽车"与"苹果"正交（相似度0），只有完全相同话题才 >=0.99

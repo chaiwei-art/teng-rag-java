@@ -17,7 +17,9 @@ class TextChunkerTest {
         var props = new com.teng.rag.config.RagProperties(
                 new com.teng.rag.config.RagProperties.Llm("http://localhost", "k", "m", 10),
                 new com.teng.rag.config.RagProperties.Retrieval(4, 0.35),
-                new com.teng.rag.config.RagProperties.Chunk(100, 20));
+                new com.teng.rag.config.RagProperties.Chunk(100, 20),
+                new com.teng.rag.config.RagProperties.Cache(1800, 300, 30),
+                new com.teng.rag.config.RagProperties.Store("target/test-store.json"));
         return new TextChunker(props);
     }
 

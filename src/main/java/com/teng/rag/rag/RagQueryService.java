@@ -12,18 +12,21 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * RAG 查询编排（Retrieval 阶段 + 生成阶段）。
+ * RAG 查询服务（Retrieval 阶段 + 生成阶段的底层能力）。
  *
  * <p>回答问题的完整链路：</p>
  * <ol>
  *   <li>问题 → 嵌入向量（与入库用同一个模型，保证同一语义空间）</li>
  *   <li>向量相似检索 Top-K（带最低分阈值，低于阈值宁可不答）</li>
  *   <li>命中片段拼进 Prompt（带来源编号）</li>
- *   <li>LLM 流式生成，先推 sources 事件再推 token 流</li>
+ *   <li>LLM 流式生成</li>
  * </ol>
+ *
+ * <p>缓存/落库等编排逻辑在 {@link ChatOrchestrator}——本类只保留"检索 + 流式"原子能力，
+ * 单层职责清晰，也方便评测（EvalService 只依赖 {@link Retriever}）。</p>
  */
 @Service
-public class RagQueryService {
+public class RagQueryService implements Retriever {
 
     private final EmbeddingModel embeddingModel;
     private final EmbeddingStore<TextSegment> embeddingStore;
@@ -49,7 +52,7 @@ public class RagQueryService {
     public record Retrieval(List<Hit> hits, String prompt) {
     }
 
-    /** 纯检索：问题 → 命中片段。单独拆出来便于测试。 */
+    @Override
     public Retrieval retrieve(String question) {
         Embedding queryEmbedding = embeddingModel.embed(question).content();
         EmbeddingSearchRequest request = EmbeddingSearchRequest.builder()
@@ -71,13 +74,10 @@ public class RagQueryService {
     }
 
     /**
-     * 流式问答：先推 sources（引用来源），再推 token 流，最后推 usage。
+     * 流式生成：把已检索结果交给 LLM，token 逐个转发给 sink。
+     * 不再重复检索/发 sources——编排层（orchestrator）负责事件顺序与缓存。
      */
-    public void answer(String question, QueryEventSink sink) {
-        long start = System.currentTimeMillis();
-        Retrieval retrieval = retrieve(question);
-        sink.onSources(retrieval.hits());
-
+    public void streamFromRetrieval(Retrieval retrieval, QueryEventSink sink) {
         llmStreamer.stream(retrieval.prompt(), new LlmStreamer.Callback() {
             @Override
             public void onToken(String text) {
@@ -94,9 +94,18 @@ public class RagQueryService {
                 sink.onError(error);
             }
         });
-        // 注：latency 由 LlmStreamer 内部计时上报，这里 start 仅作检索耗时参考
-        long retrievalMs = System.currentTimeMillis() - start;
-        sink.onRetrievalTiming(retrievalMs);
+    }
+
+    /**
+     * 一步式问答（检索 + 发 sources + 流式 + 检索计时）。
+     * 保留给简单场景与测试；完整链路（缓存/落库）走 ChatOrchestrator。
+     */
+    public void answer(String question, QueryEventSink sink) {
+        long start = System.currentTimeMillis();
+        Retrieval retrieval = retrieve(question);
+        sink.onSources(retrieval.hits());
+        streamFromRetrieval(retrieval, sink);
+        sink.onRetrievalTiming(System.currentTimeMillis() - start);
     }
 
     /** 编排结果回调（Controller 实现为 SSE 推送，测试实现为录制）。 */
@@ -110,5 +119,9 @@ public class RagQueryService {
         void onError(Throwable error);
 
         void onRetrievalTiming(long retrievalMs);
+
+        /** 是否缓存命中（前端展示 ⚡ 标识）。默认忽略，兼容既有测试桩。 */
+        default void onCacheHit(boolean hit) {
+        }
     }
 }

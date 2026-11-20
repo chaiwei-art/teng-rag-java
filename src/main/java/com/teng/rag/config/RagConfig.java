@@ -3,6 +3,8 @@ package com.teng.rag.config;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -23,6 +25,8 @@ import java.time.Duration;
 @Configuration
 public class RagConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(RagConfig.class);
+
     /**
      * 中文文本嵌入模型（ONNX 本地推理）。
      * 首次调用会从 classpath 加载 ~95MB 模型到内存，之后纯本地、零 API 成本。
@@ -33,13 +37,22 @@ public class RagConfig {
     }
 
     /**
-     * 内存向量库。
-     * MVP 选它：零外部依赖、进程重启即失。
-     * 生产替换路径：换 Bean 实现（Milvus/PgVector/Elasticsearch），
+     * 内存向量库（启动时加载快照文件，解决"元数据在 MySQL、向量在内存"的重启不一致）。
+     * MVP 选内存实现：零外部依赖；生产替换路径：换 Bean 实现（Milvus/PgVector/Elasticsearch），
      * 业务代码只依赖 EmbeddingStore 接口，不感知具体存储。
      */
     @Bean
-    public InMemoryEmbeddingStore<dev.langchain4j.data.segment.TextSegment> embeddingStore() {
+    public InMemoryEmbeddingStore<dev.langchain4j.data.segment.TextSegment> embeddingStore(RagProperties props) {
+        java.nio.file.Path snapshot = java.nio.file.Path.of(props.store().file());
+        if (java.nio.file.Files.exists(snapshot)) {
+            try {
+                var loaded = InMemoryEmbeddingStore.fromFile(snapshot);
+                log.info("[vector] 已加载向量快照 {}: {} 条", snapshot, loaded.size());
+                return loaded;
+            } catch (Exception e) {
+                log.warn("[vector] 向量快照加载失败，按空库启动: {}", e.getMessage());
+            }
+        }
         return new InMemoryEmbeddingStore<>();
     }
 

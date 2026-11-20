@@ -1,11 +1,16 @@
 package com.teng.rag.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.teng.rag.rag.ChatOrchestrator;
 import com.teng.rag.rag.RagQueryService;
+import com.teng.rag.store.ChatHistoryEntity;
+import com.teng.rag.store.ChatHistoryStore;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -16,14 +21,18 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * 问答接口：POST /api/chat → SSE 流。
+ * 问答接口：
+ * POST /api/chat      → SSE 流（编排：缓存/检索/生成/落库）
+ * GET  /api/history   → 最近问答历史（MySQL 持久化）
  *
  * <p>SSE 事件协议（与项目内前端约定）：</p>
  * <pre>
- * meta    {model}                      连接建立
+ * meta    {model}                          连接建立
+ * cache   {hit}                           是否缓存命中（⚡ 标识）
  * sources {items:[{docName,text,score}]}  引用来源（检索先于生成）
- * token   {text}                       增量文本
- * usage   {promptTokens, completionTokens, latencyMs, retrievalMs}
+ * token   {text}                          增量文本（缓存命中时一次性推全文）
+ * retrieval {latencyMs}                   检索耗时
+ * usage   {promptTokens, completionTokens, latencyMs}
  * done    {}
  * error   {message}
  * </pre>
@@ -35,7 +44,8 @@ import java.util.concurrent.Executors;
 @RequestMapping("/api")
 public class ChatController {
 
-    private final RagQueryService queryService;
+    private final ChatOrchestrator orchestrator;
+    private final ChatHistoryStore historyStore;
     private final ObjectMapper objectMapper;
     private final ExecutorService executor = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "rag-query");
@@ -43,8 +53,9 @@ public class ChatController {
         return t;
     });
 
-    public ChatController(RagQueryService queryService, ObjectMapper objectMapper) {
-        this.queryService = queryService;
+    public ChatController(ChatOrchestrator orchestrator, ChatHistoryStore historyStore, ObjectMapper objectMapper) {
+        this.orchestrator = orchestrator;
+        this.historyStore = historyStore;
         this.objectMapper = objectMapper;
     }
 
@@ -64,7 +75,7 @@ public class ChatController {
 
         executor.submit(() -> {
             try {
-                queryService.answer(question, new SseQuerySink(emitter));
+                orchestrator.answer(question, new SseQuerySink(emitter));
             } catch (Exception e) {
                 emitError(emitter, e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
                 try {
@@ -77,6 +88,12 @@ public class ChatController {
         return emitter;
     }
 
+    /** 最近问答历史（倒序）。 */
+    @GetMapping("/history")
+    public List<ChatHistoryEntity> history(@RequestParam(defaultValue = "50") int limit) {
+        return historyStore.findRecent(Math.min(Math.max(limit, 1), 200));
+    }
+
     /** 把编排事件翻译成 SSE 帧。 */
     private class SseQuerySink implements RagQueryService.QueryEventSink {
 
@@ -84,6 +101,11 @@ public class ChatController {
 
         SseQuerySink(SseEmitter emitter) {
             this.emitter = emitter;
+        }
+
+        @Override
+        public void onCacheHit(boolean hit) {
+            send(emitter, "cache", Map.of("hit", hit));
         }
 
         @Override

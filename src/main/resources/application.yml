@@ -7,6 +7,30 @@ spring:
       max-file-size: 50MB
       max-request-size: 50MB
 
+  # ---- MySQL：文档元数据 + 对话历史 ----
+  datasource:
+    url: jdbc:mysql://localhost:3306/teng_rag?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+    username: root
+    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      # schema.sql 使用 CREATE TABLE IF NOT EXISTS，每次启动幂等执行
+      mode: always
+
+  # ---- Redis：问答缓存 ----
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 3s
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+
 rag:
   llm:
     # OpenAI 兼容网关（默认指向本机已配置的 mimo 网关，可用环境变量覆盖）
@@ -16,8 +40,19 @@ rag:
     timeout-seconds: 60
   retrieval:
     top-k: 4
-    min-score: 0.35
+    # LangChain4j 分数是 relevance=(1+cos)/2：正交=0.5、同义=1.0
+    # 阈值 0.6 ≈ 要求余弦正相关，无关内容被过滤（宁缺毋滥防幻觉）
+    min-score: 0.6
   chunk:
     # 切分粒度（字符）：中文场景 500 字/段、80 字重叠是比较稳的起点
     max-segment-size: 500
     max-overlap-size: 80
+  store:
+    # 向量库快照（内存 EmbeddingStore 的 JSON 持久化，启动时自动加载）
+    file: ${RAG_STORE_FILE:data/vector-store.json}
+  cache:
+    # 问答缓存 TTL（秒）+ 随机抖动（防雪崩）
+    ttl-seconds: 1800
+    jitter-seconds: 300
+    # "未检索到"负缓存 TTL（秒）：短缓存防空穿透
+    negative-ttl-seconds: 30
