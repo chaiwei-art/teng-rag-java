@@ -12,6 +12,16 @@
 ![cache](https://img.shields.io/badge/cache-Redis%20·%20内嵌兜底-red)
 ![storage](https://img.shields.io/badge/storage-MySQL%20·%20MyBatis--Plus-blue)
 
+## 🖼 效果演示
+
+**流式问答 + 引用溯源 + Token/耗时统计**：
+
+![问答演示](docs/demo-chat.jpeg)
+
+**离线检索评测（20 条标注，hit@4 = 100%，零 token 成本）**：
+
+![离线评测](docs/demo-eval.jpeg)
+
 ## ✨ 特性
 
 | 能力 | 说明 |
